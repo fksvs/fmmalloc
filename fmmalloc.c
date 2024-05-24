@@ -15,13 +15,13 @@ struct block_metadata {
 #define METADATA_SIZE sizeof(struct block_metadata)
 
 void *memory_base = NULL;
-void *program_break = NULL;
+void *last_block = NULL;
 
 /* search for a specific block */
-struct block_metadata *search_ptr(void *ptr)
+struct block_metadata *search_block(void *ptr)
 {
 	struct block_metadata *temp = (struct block_metadata *)memory_base;
-	struct block_metadata *block = (struct block_metadata *)ptr;
+	struct block_metadata *block = (struct block_metadata *)ptr - 1;
 
 	while (temp != NULL) {
 		if (temp == block) {
@@ -60,8 +60,8 @@ struct block_metadata *allocate_block(size_t size)
 		return NULL;
 	}
 
-	if (program_break) {
-		prev = (struct block_metadata *)program_break;
+	if (last_block) {
+		prev = (struct block_metadata *)last_block;
 		prev->next = block;
 	}
 
@@ -69,8 +69,35 @@ struct block_metadata *allocate_block(size_t size)
 	block->block_status = ALLOCATED;
 	block->prev = prev;
 	block->next = NULL;
+	last_block = block;
 
 	return block;
+}
+
+/* algorithm: check previous and next memory blocks, if one or two of them is
+ * FREED and they are in sequential order, combine them. */
+void combine_free_blocks(void *ptr)
+{
+	struct block_metadata *block = (struct block_metadata *)ptr - 1;
+	struct block_metadata *prev_block = block->prev;
+	struct block_metadata *next_block = block->next;
+
+	if (next_block && next_block->block_status == FREED &&
+		next_block == (ptr + block->block_size)) {
+		if (last_block == next_block) last_block = block;
+
+		block->block_size += next_block->block_size;
+		block->next = next_block->next;
+		if (next_block->next) next_block->next->prev = block;
+	}
+	if (prev_block && prev_block->block_status == FREED &&
+		block == (prev_block + prev_block->block_size)) {
+		if (last_block == block) prev_block = last_block;
+
+		prev_block->block_size += block->block_size;
+		prev_block->next = block->next;
+		if (block->next) block->next->prev = prev_block;
+	}
 }
 
 /* algorithm: iterate over memory block list, if ptr is found and block_status
@@ -84,7 +111,7 @@ void fmfree(void *ptr)
 		return;
 	}
 
-	struct block_metadata *block = search_ptr(ptr);
+	struct block_metadata *block = search_block(ptr);
 	if (!block) {
 		return;
 	}
@@ -94,6 +121,7 @@ void fmfree(void *ptr)
 	}
 
 	block->block_status = FREED;
+	combine_free_blocks(ptr);
 }
 
 /* algorithm: iterate over memory block list, if block_status is FREED and block 
@@ -114,7 +142,6 @@ void *fmmalloc(size_t size)
 		block = allocate_block(size);
 		if (block) {
 			memory_base = block;
-			program_break = block;
 			return block + 1;
 		}
 
@@ -131,7 +158,6 @@ void *fmmalloc(size_t size)
 	/* there is no free block for requested size, allocate new memory */
 	block = allocate_block(size);
 	if (block) {
-		program_break = block;
 		return block + 1;
 	}
 
