@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <sys/types.h>
+#include <assert.h>
 #include "fmmalloc.h"
 
 #define ALLOCATED 1
@@ -17,7 +18,6 @@ struct block_metadata {
 void *memory_base = NULL;
 void *last_block = NULL;
 
-/* search for a specific block */
 struct block_metadata *search_block(void *ptr)
 {
 	struct block_metadata *temp = (struct block_metadata *)memory_base;
@@ -34,7 +34,6 @@ struct block_metadata *search_block(void *ptr)
 	return NULL;
 }
 
-/* search free block */
 struct block_metadata *search_free_block(size_t size)
 {
 	struct block_metadata *temp = (struct block_metadata *)memory_base;
@@ -50,7 +49,12 @@ struct block_metadata *search_free_block(size_t size)
 	return NULL;
 }
 
-/* allocate new space */
+struct block_metadata *split_free_block(struct block_metadata *block, size_t size)
+{
+	/* TODO implement algorithm */
+	return block;
+}
+
 struct block_metadata *allocate_block(size_t size)
 {
 	struct block_metadata *block = sbrk(METADATA_SIZE + size);
@@ -74,9 +78,7 @@ struct block_metadata *allocate_block(size_t size)
 	return block;
 }
 
-/* algorithm: check previous and next memory blocks, if one or two of them is
- * FREED and they are in sequential order, combine them. */
-void combine_free_blocks(void *ptr)
+void merge_free_blocks(void *ptr)
 {
 	struct block_metadata *block = (struct block_metadata *)ptr - 1;
 	struct block_metadata *prev_block = block->prev;
@@ -100,11 +102,6 @@ void combine_free_blocks(void *ptr)
 	}
 }
 
-/* algorithm: iterate over memory block list, if ptr is found and block_status
- * is ALLOCATED set block_status to FREED, if ptr is found and block_status is
- * FREE, throw error. if ptr is not found or if ptr is NULL do nothing. after 
- * freeing memory block, check previous and next memory block. if one or two 
- * of them is free, combine them. */
 void fmfree(void *ptr)
 {
 	if (!ptr) {
@@ -116,19 +113,12 @@ void fmfree(void *ptr)
 		return;
 	}
 
-	if (block->block_status == FREED) {
-		return; /* give error */
-	}
+	assert(block->block_status == ALLOCATED);
 
 	block->block_status = FREED;
-	combine_free_blocks(ptr);
+	merge_free_blocks(ptr);
 }
 
-/* algorithm: iterate over memory block list, if block_status is FREED and block 
- * size is equel to or bigger then size, set block_status to ALLOCATED and
- * return it. if no memory block found that fits to size, allocate new block and
- * return it. if found memory blocks block_size is bigger than size, split it to
- * requested size. */
 void *fmmalloc(size_t size)
 {
 	if (size <= 0) {
@@ -137,7 +127,6 @@ void *fmmalloc(size_t size)
 
 	struct block_metadata *block;
 
-	/* first allocation */
 	if (!memory_base) {
 		block = allocate_block(size);
 		if (block) {
@@ -148,14 +137,13 @@ void *fmmalloc(size_t size)
 		return NULL;
 	}
 
-	/* search for free block */
 	block = search_free_block(size);
 	if (block) {
+		block = split_free_block(block, size);
 		block->block_status = ALLOCATED;
 		return block + 1;
 	}
 
-	/* there is no free block for requested size, allocate new memory */
 	block = allocate_block(size);
 	if (block) {
 		return block + 1;
@@ -164,7 +152,38 @@ void *fmmalloc(size_t size)
 	return NULL;
 }
 
-/* TODO */
-void *fmcalloc(size_t nmemb, size_t size);
-void *fmrealloc(void *ptr, size_t size);
-void *fmreallocarray(void *ptr, size_t nmemb, size_t size);
+/* TODO check integer overflow */
+void *fmcalloc(size_t nmemb, size_t size)
+{
+	void *block = fmmalloc(nmemb * size);
+
+	unsigned char *ptr = (unsigned char *)block;
+	unsigned char zero = (unsigned char)0;
+
+	for (size_t i = 0; i < nmemb * size; i++) {
+		*(ptr + i) = zero;
+	}
+
+	return block;
+}
+
+/* TODO implement */
+void *fmrealloc(void *ptr, size_t size)
+{
+	void *block = NULL;
+
+	if (ptr && size >= 0) {
+		fmfree(ptr);
+		block = fmmalloc(size);
+	} else if (!ptr) {
+		block = fmmalloc(size);
+	}
+
+	return block;
+}
+
+/* TODO check integer overflow */
+void *fmreallocarray(void *ptr, size_t nmemb, size_t size)
+{
+	return fmrealloc(ptr, nmemb * size);
+}
