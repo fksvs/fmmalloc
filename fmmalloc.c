@@ -49,12 +49,6 @@ struct block_metadata *search_free_block(size_t size)
 	return NULL;
 }
 
-struct block_metadata *split_free_block(struct block_metadata *block, size_t size)
-{
-	/* TODO implement algorithm */
-	return block;
-}
-
 struct block_metadata *allocate_block(size_t size)
 {
 	struct block_metadata *block = sbrk(METADATA_SIZE + size);
@@ -152,10 +146,16 @@ void *fmmalloc(size_t size)
 	return NULL;
 }
 
-/* TODO check integer overflow */
 void *fmcalloc(size_t nmemb, size_t size)
 {
+	if (nmemb != 0 && size > SIZE_MAX / nmemb) {
+		return NULL;
+	}
+
 	void *block = fmmalloc(nmemb * size);
+	if (!block) {
+		return NULL;
+	}
 
 	unsigned char *ptr = (unsigned char *)block;
 	unsigned char zero = (unsigned char)0;
@@ -167,7 +167,6 @@ void *fmcalloc(size_t nmemb, size_t size)
 	return block;
 }
 
-/* TODO implement */
 void *fmrealloc(void *ptr, size_t size)
 {
 	void *block = NULL;
@@ -182,8 +181,11 @@ void *fmrealloc(void *ptr, size_t size)
 	return block;
 }
 
-/* TODO check integer overflow */
 void *fmreallocarray(void *ptr, size_t nmemb, size_t size)
 {
+	if (nmemb != 0 && size > SIZE_MAX / nmemb) {
+		return NULL;
+	}
+
 	return fmrealloc(ptr, nmemb * size);
 }
