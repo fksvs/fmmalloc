@@ -1,7 +1,7 @@
 #include <unistd.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <assert.h>
-#include "fmmalloc.h"
 
 #define ALLOCATED 1
 #define FREED 0
@@ -133,7 +133,6 @@ void *fmmalloc(size_t size)
 
 	block = search_free_block(size);
 	if (block) {
-		block = split_free_block(block, size);
 		block->block_status = ALLOCATED;
 		return block + 1;
 	}
@@ -171,7 +170,7 @@ void *fmrealloc(void *ptr, size_t size)
 {
 	void *block = NULL;
 
-	if (ptr && size >= 0) {
+	if (ptr) {
 		fmfree(ptr);
 		block = fmmalloc(size);
 	} else if (!ptr) {
