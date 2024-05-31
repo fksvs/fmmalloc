@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -78,25 +79,27 @@ void merge_free_blocks(void *ptr)
 	struct block_metadata *prev_block = block->prev;
 	struct block_metadata *next_block = block->next;
 
-	if (next_block && next_block->block_status == FREED &&
-		next_block == (ptr + block->block_size)) {
-		if (last_block == next_block) last_block = block;
+	if (next_block) {
+		if (next_block->block_status == FREED) {
+			if (last_block == next_block) last_block = block;
 
-		block->block_size += next_block->block_size;
-		block->next = next_block->next;
-		if (next_block->next) next_block->next->prev = block;
+			block->block_size += next_block->block_size;
+			block->next = next_block->next;
+			if (next_block->next) next_block->next->prev = block;
+	       }
 	}
-	if (prev_block && prev_block->block_status == FREED &&
-		block == (prev_block + prev_block->block_size)) {
-		if (last_block == block) prev_block = last_block;
+	if (prev_block) {
+		if (prev_block->block_status == FREED) {
+			if (last_block == block) prev_block = last_block;
 
-		prev_block->block_size += block->block_size;
-		prev_block->next = block->next;
-		if (block->next) block->next->prev = prev_block;
+			prev_block->block_size += block->block_size;
+			prev_block->next = block->next;
+			if (block->next) block->next->prev = prev_block;
+		}
 	}
 }
 
-void fmfree(void *ptr)
+void free(void *ptr)
 {
 	if (!ptr) {
 		return;
@@ -113,7 +116,7 @@ void fmfree(void *ptr)
 	merge_free_blocks(ptr);
 }
 
-void *fmmalloc(size_t size)
+void *malloc(size_t size)
 {
 	if (size <= 0) {
 		return NULL;
@@ -145,13 +148,13 @@ void *fmmalloc(size_t size)
 	return NULL;
 }
 
-void *fmcalloc(size_t nmemb, size_t size)
+void *calloc(size_t nmemb, size_t size)
 {
 	if (nmemb != 0 && size > SIZE_MAX / nmemb) {
 		return NULL;
 	}
 
-	void *block = fmmalloc(nmemb * size);
+	void *block = malloc(nmemb * size);
 	if (!block) {
 		return NULL;
 	}
@@ -166,25 +169,25 @@ void *fmcalloc(size_t nmemb, size_t size)
 	return block;
 }
 
-void *fmrealloc(void *ptr, size_t size)
+void *realloc(void *ptr, size_t size)
 {
 	void *block = NULL;
 
 	if (ptr) {
-		fmfree(ptr);
-		block = fmmalloc(size);
+		free(ptr);
+		block = malloc(size);
 	} else if (!ptr) {
-		block = fmmalloc(size);
+		block = malloc(size);
 	}
 
 	return block;
 }
 
-void *fmreallocarray(void *ptr, size_t nmemb, size_t size)
+void *reallocarray(void *ptr, size_t nmemb, size_t size)
 {
 	if (nmemb != 0 && size > SIZE_MAX / nmemb) {
 		return NULL;
 	}
 
-	return fmrealloc(ptr, nmemb * size);
+	return realloc(ptr, nmemb * size);
 }
