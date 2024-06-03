@@ -11,7 +11,7 @@ git clone https://github.com/fksvs/fmmalloc
 git clone https://gitlab.com/fksvs/fmmalloc
 ```
 
-Build the source code and produce shared object, this will also compile the test programs:
+Build the source code. This will produce the shared object and also compile the test programs:
 
 ```console
 make
